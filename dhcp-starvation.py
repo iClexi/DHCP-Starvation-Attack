@@ -1,3 +1,4 @@
+```python
 import os
 import random
 import signal
@@ -114,6 +115,11 @@ def ask_float(label, default_value, minimum, maximum):
 def ask_text(label, default_value):
     value = input(f"{label} [Enter = {default_value}]: ").strip()
     return default_value if value == "" else value
+
+
+def wait_enter():
+    print("")
+    input("Presiona Enter para iniciar el ataque en el laboratorio")
 
 
 def random_mac():
@@ -257,13 +263,10 @@ def main():
     print(f"Pausa: {interval}")
     print(f"Timeout OFFER: {offer_timeout}")
     print(f"Timeout ACK: {ack_timeout}")
+    print(f"Hostname falso: {hostname_prefix}")
     print("")
 
-    confirm = input("Escribe s para iniciar: ").strip().lower()
-
-    if confirm != "s":
-        print("Cancelado")
-        sys.exit(0)
+    wait_enter()
 
     conf.iface = iface
     conf.verb = 0
@@ -373,3 +376,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
