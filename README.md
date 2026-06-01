@@ -10,12 +10,19 @@
 
 ## Información del proyecto
 
-* **Autor:** Michael David Robles Fermín
-* **Matrícula:** 2025-0845
-* **Asignatura:** Seguridad de Redes
-* **Repositorio:** [https://github.com/iClexi/DHCP-Starvation-Attack](https://github.com/iClexi/DHCP-Starvation-Attack)
-* **Video:** [https://youtu.be/_hAUU0W4hLw?si=vcRpOVleFQxaPitr](https://youtu.be/_hAUU0W4hLw?si=vcRpOVleFQxaPitr)
-* **Documentación técnica profesional:** [docs/documentacion-tecnica-profesional.docx](docs/documentacion-tecnica-profesional.docx)
+- **Autor:** Michael David Robles Fermín
+- **Matrícula:** 2025-0845
+- **Docente:** Jonathan Rondón
+- **Asignatura:** Seguridad de Redes
+- **Repositorio:** https://github.com/iClexi/DHCP-Starvation-Attack
+- **Video:** https://youtu.be/_hAUU0W4hLw?si=vcRpOVleFQxaPitr
+- **Documentación técnica profesional:** [docs/documentacion-tecnica-profesional.pdf](docs/documentacion-tecnica-profesional.pdf)
+
+URL directa de la documentación técnica profesional:
+
+```text
+docs/documentacion-tecnica-profesional.pdf
+```
 
 ## Aviso de uso responsable
 
@@ -23,27 +30,29 @@ Este proyecto fue desarrollado únicamente con fines educativos, académicos y d
 
 ## Objetivo del laboratorio
 
-Demostrar cómo un atacante puede agotar el pool de direcciones IP de un servidor DHCP legítimo mediante el envío masivo de solicitudes DHCP usando múltiples direcciones MAC falsas. Luego se aplica una contramedida basada en **DHCP Snooping**, **rate limit** y **Port Security** para bloquear el ataque y restaurar el servicio legítimo.
+Demostrar un ataque **DHCP Starvation**, donde Kali Linux envía múltiples solicitudes DHCP usando direcciones MAC falsas hasta agotar el pool del servidor DHCP legítimo. Después se aplica una contramedida basada en **DHCP Snooping**, **limitación de tasa** y **Port Security** para impedir que el atacante siga consumiendo direcciones IP.
 
 ## Topología de laboratorio
 
 ![Topología del laboratorio](images/topology.png)
 
-## Flujo del laboratorio
+La red de laboratorio utiliza el segmento `20.25.8.0/24` con R-1 como servidor DHCP legítimo, SW-1 como switch de capa 2, Kali como atacante y VPC1 como cliente legítimo.
 
-### 1. Ejecución del ataque
+## Ejecución del ataque
 
-Se ejecuta el script desde Kali Linux:
+Desde Kali Linux se ejecuta el script:
 
 ```bash
 sudo python3 dhcp-starvation.py
 ```
 
+Durante la ejecución se selecciona la interfaz conectada al switch, la cantidad de clientes falsos y los tiempos de espera para las respuestas DHCP.
+
 ![Ejecución del script](images/script_execution.png)
 
-### 2. Evidencia de agotamiento del pool DHCP
+## Evidencia del impacto
 
-Mientras el ataque está activo, el router R-1 muestra múltiples asignaciones DHCP dinámicas falsas:
+Mientras el ataque está activo, en R-1 se observa que el servidor DHCP tiene múltiples asignaciones dinámicas ocupadas por clientes falsos:
 
 ```cisco
 show ip dhcp binding
@@ -51,25 +60,49 @@ show ip dhcp binding
 
 ![Pool DHCP lleno en R-1](images/dhcp_binding_full_r1.png)
 
-### 3. Impacto en la víctima
-
-La VPC intenta solicitar una dirección IP por DHCP, pero falla porque el pool quedó agotado:
+Luego, cuando VPC1 intenta solicitar una dirección por DHCP, no recibe respuesta válida porque el pool fue agotado:
 
 ```text
 dhcp
+show ip
 ```
 
 ![Fallo de DHCP en VPC1](images/pc1_dhcp_failed.png)
 
-### 4. Aplicación de la contramedida
+## Contramedida aplicada
 
-En el switch SW-1 se habilita DHCP Snooping de forma global y sobre la VLAN 1. Además, se configura el puerto hacia Kali como no confiable, se limita la tasa de mensajes DHCP y se habilita Port Security.
+La defensa se aplica en el switch SW-1. Se habilita DHCP Snooping globalmente y en la VLAN 1. El puerto hacia el router R-1 se marca como confiable, mientras que el puerto hacia Kali queda como no confiable. Además, se agrega limitación de tasa y Port Security para impedir el uso de múltiples MAC falsas desde el mismo puerto.
+
+```cisco
+configure terminal
+
+ip dhcp snooping
+ip dhcp snooping vlan 1
+no ip dhcp snooping information option
+
+interface gigabitEthernet0/0
+ description HACIA_R1_DHCP_LEGITIMO
+ ip dhcp snooping trust
+
+interface gigabitEthernet0/1
+ description HACIA_KALI_ATACANTE
+ no ip dhcp snooping trust
+ ip dhcp snooping limit rate 5
+ switchport mode access
+ switchport port-security
+ switchport port-security maximum 1
+ switchport port-security violation shutdown
+ switchport port-security mac-address sticky
+
+end
+write memory
+```
 
 ![Configuración de la contramedida](images/mitigation_switch.png)
 
-### 5. Limpieza de bindings en el router
+## Limpieza del router después del ataque
 
-Para restaurar el servicio, se limpian los bindings y conflictos DHCP, además de la caché ARP:
+Después de aplicar la mitigación, se limpian las asignaciones DHCP, conflictos y caché ARP en R-1:
 
 ```cisco
 clear ip dhcp binding *
@@ -79,52 +112,58 @@ clear arp-cache
 
 ![Limpieza en R-1](images/cleanup_r1.png)
 
-### 6. Reintento del ataque después de la mitigación
+## Verificación posterior a la mitigación
 
-Cuando se vuelve a ejecutar el ataque, el script ya no recibe ofertas DHCP. Esto indica que la protección está funcionando, porque los paquetes del atacante quedan bloqueados o limitados desde el puerto no confiable.
+Al ejecutar el ataque nuevamente, el script ya no recibe ofertas DHCP para las MAC falsas. Esto demuestra que la contramedida está bloqueando o limitando el flujo del ataque desde el puerto no confiable.
 
 ![Ataque sin OFFER](images/script_no_offer_after_mitigation.png)
 
-### 7. Verificación final del servicio
+Finalmente, VPC1 vuelve a obtener una dirección IP legítima desde R-1:
 
-Finalmente, la VPC vuelve a obtener una dirección IP legítima del router R-1:
+```text
+dhcp
+show ip
+```
 
 ![DHCP funcional en VPC1](images/pc1_dhcp_success_after_mitigation.png)
 
-## Contramedida aplicada
+## Comandos de verificación recomendados
 
-La defensa utilizada en este laboratorio combina:
-
-* **DHCP Snooping:** valida qué puertos pueden enviar respuestas DHCP.
-* **Rate limit:** limita la velocidad de mensajes DHCP en puertos no confiables.
-* **Port Security:** evita que un atacante utilice múltiples direcciones MAC falsas desde un mismo puerto.
-
-## Comandos principales de mitigación
+En el switch:
 
 ```cisco
-ip dhcp snooping
-ip dhcp snooping vlan 1
-no ip dhcp snooping information option
-
-interface gigabitEthernet0/0
-ip dhcp snooping trust
-
-interface gigabitEthernet0/1
-no ip dhcp snooping trust
-ip dhcp snooping limit rate 5
-switchport mode access
-switchport port-security
-switchport port-security maximum 1
-switchport port-security violation shutdown
-switchport port-security mac-address sticky
+show ip dhcp snooping
+show ip dhcp snooping binding
+show port-security interface gigabitEthernet0/1
+show interfaces status
+show logging
 ```
 
-## Enlaces directos
+En el router:
 
-* **Repositorio:** [https://github.com/iClexi/DHCP-Starvation-Attack](https://github.com/iClexi/DHCP-Starvation-Attack)
-* **Video:** [https://youtu.be/_hAUU0W4hLw?si=vcRpOVleFQxaPitr](https://youtu.be/_hAUU0W4hLw?si=vcRpOVleFQxaPitr)
-* **Documentación técnica profesional:** [docs/documentacion-tecnica-profesional.docx](docs/documentacion-tecnica-profesional.docx)
+```cisco
+show ip dhcp binding
+show ip dhcp pool
+show ip dhcp conflict
+```
+
+En VPC1:
+
+```text
+dhcp
+show ip
+```
 
 ## Conclusión
 
-El ataque DHCP Starvation demuestra que un atacante puede comprometer la disponibilidad del servicio DHCP agotando el pool de direcciones IP mediante solicitudes falsas. La implementación de DHCP Snooping, limitación de tasa y Port Security permite reducir el impacto del ataque, bloquear el uso de múltiples MAC falsas y restaurar el funcionamiento normal para los clientes legítimos.
+El ataque DHCP Starvation afecta directamente la disponibilidad del servicio DHCP, porque consume el pool de direcciones IP mediante solicitudes generadas con direcciones MAC falsas. Cuando el pool queda lleno, un cliente legítimo como VPC1 no puede recibir una dirección IP y pierde la capacidad de integrarse correctamente a la red.
+
+La mitigación aplicada reduce el riesgo de forma efectiva. **DHCP Snooping** permite diferenciar puertos confiables y no confiables, **rate limit** limita la cantidad de mensajes DHCP permitidos desde el puerto atacante, y **Port Security** impide que una sola interfaz aprenda múltiples direcciones MAC falsas. En conjunto, estas medidas evitan que Kali continúe agotando el pool y permiten que el cliente legítimo vuelva a recibir DHCP correctamente.
+
+## Enlaces directos
+
+```text
+Enlace repositorio de GitHub: https://github.com/iClexi/DHCP-Starvation-Attack
+
+Enlace Video de Youtube: https://youtu.be/_hAUU0W4hLw?si=vcRpOVleFQxaPitr
+```
