@@ -1,17 +1,25 @@
-# DHCP Starvation Attack – Guía How-to
+# DHCP Starvation Attack Lab
+
+![Python](https://img.shields.io/badge/Python-3.x-blue)
+![Platform](https://img.shields.io/badge/Platform-Kali%20Linux-red)
+![Lab](https://img.shields.io/badge/Environment-GNS3%20%7C%20IOSvL2-orange)
+![Attack](https://img.shields.io/badge/Attack-DHCP%20Starvation-purple)
+![Mitigation](https://img.shields.io/badge/Mitigation-DHCP%20Snooping%20%7C%20Port%20Security-darkgreen)
+![Use](https://img.shields.io/badge/Use-Controlled%20Lab-yellow)
+![Topic](https://img.shields.io/badge/Topic-Network%20Security-lightgrey)
 
 ## Información del proyecto
 
-- **Autor:** Michael David Robles Fermín
-- **Matrícula:** 2025-0845
-- **Asignatura:** Seguridad de Redes
-- **Repositorio:** https://github.com/iClexi/DHCP-Starvation-Attack
-- **Video:** https://youtu.be/_hAUU0W4hLw?si=vcRpOVleFQxaPitr
-- **Documentación técnica profesional:** `docs/documentacion-tecnica-profesional.docx`
+* **Autor:** Michael David Robles Fermín
+* **Matrícula:** 2025-0845
+* **Asignatura:** Seguridad de Redes
+* **Repositorio:** [https://github.com/iClexi/DHCP-Starvation-Attack](https://github.com/iClexi/DHCP-Starvation-Attack)
+* **Video:** [https://youtu.be/_hAUU0W4hLw?si=vcRpOVleFQxaPitr](https://youtu.be/_hAUU0W4hLw?si=vcRpOVleFQxaPitr)
+* **Documentación técnica profesional:** [docs/documentacion-tecnica-profesional.docx](docs/documentacion-tecnica-profesional.docx)
 
 ## Aviso de uso responsable
 
-Este proyecto fue desarrollado únicamente con fines educativos, académicos y de laboratorio controlado. Las pruebas deben ejecutarse solamente en entornos propios o autorizados.
+Este proyecto fue desarrollado únicamente con fines educativos, académicos y de laboratorio controlado. Las pruebas deben ejecutarse solamente en entornos propios o autorizados como GNS3, EVE-NG, PNETLab o laboratorios internos. No debe utilizarse en redes públicas, empresariales o de terceros sin autorización explícita.
 
 ## Objetivo del laboratorio
 
@@ -55,7 +63,7 @@ dhcp
 
 ### 4. Aplicación de la contramedida
 
-En el switch SW-1 se habilita DHCP Snooping de forma global y en la VLAN 1. Además, se configura el puerto hacia Kali como no confiable, se limita la tasa de mensajes DHCP y se habilita Port Security.
+En el switch SW-1 se habilita DHCP Snooping de forma global y sobre la VLAN 1. Además, se configura el puerto hacia Kali como no confiable, se limita la tasa de mensajes DHCP y se habilita Port Security.
 
 ![Configuración de la contramedida](images/mitigation_switch.png)
 
@@ -73,7 +81,7 @@ clear arp-cache
 
 ### 6. Reintento del ataque después de la mitigación
 
-Cuando se vuelve a ejecutar el ataque, el script ya no recibe ofertas DHCP, lo que indica que la protección está funcionando.
+Cuando se vuelve a ejecutar el ataque, el script ya no recibe ofertas DHCP. Esto indica que la protección está funcionando, porque los paquetes del atacante quedan bloqueados o limitados desde el puerto no confiable.
 
 ![Ataque sin OFFER](images/script_no_offer_after_mitigation.png)
 
@@ -87,12 +95,36 @@ Finalmente, la VPC vuelve a obtener una dirección IP legítima del router R-1:
 
 La defensa utilizada en este laboratorio combina:
 
-- **DHCP Snooping**: valida qué puertos pueden enviar respuestas DHCP.
-- **ip dhcp snooping limit rate**: limita la velocidad de solicitudes DHCP en puertos no confiables.
-- **Port Security**: evita que el atacante utilice múltiples direcciones MAC falsas desde un mismo puerto.
+* **DHCP Snooping:** valida qué puertos pueden enviar respuestas DHCP.
+* **Rate limit:** limita la velocidad de mensajes DHCP en puertos no confiables.
+* **Port Security:** evita que un atacante utilice múltiples direcciones MAC falsas desde un mismo puerto.
+
+## Comandos principales de mitigación
+
+```cisco
+ip dhcp snooping
+ip dhcp snooping vlan 1
+no ip dhcp snooping information option
+
+interface gigabitEthernet0/0
+ip dhcp snooping trust
+
+interface gigabitEthernet0/1
+no ip dhcp snooping trust
+ip dhcp snooping limit rate 5
+switchport mode access
+switchport port-security
+switchport port-security maximum 1
+switchport port-security violation shutdown
+switchport port-security mac-address sticky
+```
 
 ## Enlaces directos
 
-- **Repositorio:** https://github.com/iClexi/DHCP-Starvation-Attack
-- **Video:** https://youtu.be/_hAUU0W4hLw?si=vcRpOVleFQxaPitr
-- **Documentación técnica profesional:** `docs/documentacion-tecnica-profesional.docx`
+* **Repositorio:** [https://github.com/iClexi/DHCP-Starvation-Attack](https://github.com/iClexi/DHCP-Starvation-Attack)
+* **Video:** [https://youtu.be/_hAUU0W4hLw?si=vcRpOVleFQxaPitr](https://youtu.be/_hAUU0W4hLw?si=vcRpOVleFQxaPitr)
+* **Documentación técnica profesional:** [docs/documentacion-tecnica-profesional.docx](docs/documentacion-tecnica-profesional.docx)
+
+## Conclusión
+
+El ataque DHCP Starvation demuestra que un atacante puede comprometer la disponibilidad del servicio DHCP agotando el pool de direcciones IP mediante solicitudes falsas. La implementación de DHCP Snooping, limitación de tasa y Port Security permite reducir el impacto del ataque, bloquear el uso de múltiples MAC falsas y restaurar el funcionamiento normal para los clientes legítimos.
